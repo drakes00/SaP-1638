@@ -6,10 +6,10 @@ This artifacts folder contains the necessary files to reproduce the results pres
 
 To run the models and automation scripts in this repository, you need the following tools installed:
 
-* **Python**: Required to execute the verification wrapper script (`scripy.py`).
-* **ProVerif**: Required to verify the `.pv` protocol models. 
+* **Python** (3.8 or later) and [**uv**](https://docs.astral.sh/uv/): Required to execute the verification wrapper script (`scripy.py`). The script only uses the Python standard library, so there is nothing else to install.
+* **ProVerif**: Required to verify the `.pv` protocol models. It is not installed by `uv`; see <https://bblanche.gitlabpages.inria.fr/proverif/> (an `opam` package is also available).
 
-*(Note: Ensure the compiled `proverif` executable is added to your system `PATH` before running the Python scripts.)*
+*(Note: Ensure the `proverif` executable is on your system `PATH` before running the Python script. The script calls it by that name.)*
 
 ## Directory Structure
 
@@ -24,11 +24,14 @@ To run the models and automation scripts in this repository, you need the follow
 │       └── Lowe/
 └── Trace_Properties/
     ├── srp/
-    │    ├── base.pv
-    │    ├── reuse.pv
-    │    └── fix.pv
-    └──scripy.py
-``` 
+    │   ├── base.pv
+    │   ├── reuse.pv
+    │   └── fix.pv
+    ├── pyproject.toml
+    ├── uv.lock
+    └── scripy.py
+```
+
 ## 1. Offline Guessing (`Offline_Guessing/`)
 
 The `Offline_Guessing` directory contains two subfolders: one for standard SRP (`Offline_Guessing SRP6a`), and one for the fix proposed in the paper (`Offline_Guessing SRP6a_fix`).
@@ -36,8 +39,16 @@ The `Offline_Guessing` directory contains two subfolders: one for standard SRP (
 For both notions of offline guessing attacks—**à la Lowe** (`Lowe/`) and **à la Corin** (`Corin/`)—we provide the necessary ProVerif models using the following naming convention:
 
 * `no_R.pv`: Implies no leakage was considered in this file.
-* `R_{x}.pv`: Implies the analysis is for when value `x` is leaked during protocol execution.
-* `R_{x}_aft.pv`: Implies the analysis is for when value `x` is leaked after the protocol execution was completed.
+* `R{x}.pv` (for example `Ra.pv`, `Rb.pv`, `Rv.pv`, `RKc.pv`, `RKs.pv`): Implies the analysis is for when value `x` is leaked during protocol execution.
+* `R{x}_aft.pv` (for example `Rv_aft.pv`): Implies the analysis is for when value `x` is leaked after the protocol execution was completed.
+
+Each file is run on its own with ProVerif, for example:
+
+```bash
+proverif "Offline_Guessing/Offline_Guessing SRP6a/Lowe/Rb.pv"
+```
+
+The verdict is on the `RESULT` lines at the end of the output.
 
 ## 2. Trace Properties (`Trace_Properties/`)
 
@@ -64,18 +75,23 @@ Each property is referred to by a short notation. The table below lists the shor
 
 ### Execution Commands
 
-To execute the files from within the `Trace_Properties/` directory, we recommend using the following commands:
+To execute the files from within the `Trace_Properties/` directory, we recommend using the following commands. `uv run` uses the `pyproject.toml` of this directory.
 
 ```bash
+cd Trace_Properties
+
 # Run every property on the default model (srp/base.pv)
-python3 scripy.py
+uv run scripy.py
 
 # Run just those two specific properties
-python3 scripy.py auth_c2s uuks_s
+uv run scripy.py auth_c2s uuks_s
 
 # Run reuse.pv and output results in the runs_reuse folder
-python3 scripy.py --base srp/reuse.pv --out runs_reuse
+uv run scripy.py --base srp/reuse.pv --out runs_reuse
 
 # Run fix.pv and output results in the runs_fix folder
-python3 scripy.py --base srp/fix.pv --out runs_fix
+uv run scripy.py --base srp/fix.pv --out runs_fix
 ```
+
+The script runs up to 8 ProVerif processes in parallel and stops a run after 30 minutes (the `JOBS` and `TIMEOUT` constants at the top of `scripy.py`).
+Results are written in the output folder: `summary.txt` lists the minimal compromise scenarios for each property, and the sub-folders `R/` and `M/` contain one generated `.pv` file and one `.out` file for each configuration that was run.

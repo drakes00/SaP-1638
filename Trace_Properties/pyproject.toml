@@ -1,0 +1,10 @@
+[project]
+name = "srp-trace-properties"
+version = "0.1.0"
+description = "Computes the minimal compromise scenarios that break each security property of SRP, by driving ProVerif."
+requires-python = ">=3.8"
+dependencies = []
+
+[tool.uv]
+# scripy.py is a standalone script that only uses the standard library.
+package = false
