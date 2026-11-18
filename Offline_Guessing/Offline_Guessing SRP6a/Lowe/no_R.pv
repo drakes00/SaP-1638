@@ -1,0 +1,200 @@
+set simplifyProcess = false.
+set reconstructTrace = false.
+
+type tag.
+type name.
+free att:channel.
+free honest: tag.
+free dishonest: tag.
+
+const N:bitstring[data].
+
+fun H(bitstring): bitstring.
+
+
+fun minus(bitstring): bitstring.
+
+table password_file(name, name, bitstring, bitstring).
+
+
+const g:bitstring[data].
+const e0:bitstring[data].
+fun exp(bitstring,bitstring):bitstring.
+equation forall a:bitstring, b:bitstring; exp(exp(g,a),b) = exp(exp(g,b),a).
+
+
+fun add(bitstring, bitstring):bitstring.
+
+fun mult(bitstring, bitstring): bitstring.
+equation forall A, B: bitstring; mult(A, B) = mult(B, A).
+
+
+fun subr(bitstring, bitstring):bitstring.
+equation forall a, b:bitstring; subr(add(a,b), b) = a.
+equation forall a, b:bitstring; add(subr(a,b), b) = a.
+reduc    forall a, b:bitstring; subl(add(a,b),a) = b.
+
+
+
+reduc forall A, B: bitstring; div(mult(A, B), B) = A.
+
+
+event R_a(bitstring).
+event R_b(bitstring).
+event R_v(bitstring).
+event R_pwd(bitstring).
+event R_v_after(bitstring).
+event R_pwd_after(bitstring).
+event R_Kc(bitstring, bitstring).
+event R_Ks(bitstring, bitstring).
+
+
+
+event client_send_proof(name, name, bitstring, bitstring, bitstring).
+event client_accept_proof(name, name, bitstring, bitstring, bitstring).
+event server_send_proof(name, name, bitstring, bitstring, bitstring).
+event server_accept_proof(name, name, bitstring, bitstring, bitstring).
+
+
+event honest_client(name).
+event honest_server(name).
+
+
+
+not attacker(new cpS).
+not attacker(new cpC).
+not attacker(new cpC').
+
+
+(* @RESTRICTIONS@ *)
+
+(* @QUERY@ *)
+
+
+let reveal_a(x:bitstring) = event R_a(x).
+
+let reveal_b(x:bitstring) = event R_b(x).
+
+let reveal_pwd(x:bitstring) = event R_pwd(x).
+
+let reveal_v(x:bitstring) = event R_v(x).
+
+let reveal_pwd_after(x:bitstring) = event R_pwd_after(x).
+
+let reveal_v_after(x:bitstring) = event R_v_after(x).
+
+let reveal_Kc(x':bitstring, x:bitstring) = event R_Kc(x', x).
+
+let reveal_Ks(x':bitstring, x:bitstring) = event R_Ks(x', x).
+
+
+(*************************************************************
+ *             Registration phase                            *
+ *************************************************************)
+
+let client_registration_phase(Cc:name, cp': channel, cp_client: channel, t: tag) =
+    new s:bitstring;
+    new pwd:bitstring;
+    let x = H((s, H((Cc, pwd)))) in
+    let v = exp(g, x) in
+    (out(cp', (s, v, Cc) ) | out(cp_client,(Cc, pwd)) | reveal_v(v) | reveal_pwd(pwd) | (phase 1; (reveal_v_after(v) | reveal_pwd_after(pwd) | new p':bitstring; out(att,choice[pwd, p'] ) ))).
+
+
+let server_registration_phase(Ss:name, cp': channel) =
+    !(
+       in(cp', fm: bitstring);
+       let (s:bitstring, v:bitstring, Cs:name) = fm in
+       insert password_file(Ss, Cs, s, v)
+     ).
+
+
+
+(*************************************************************
+ *             Authentication phase                          *
+ *************************************************************)
+
+let client(Cc: name, Sc: name, cp': channel)=
+    in(cp', (=Cc, pwd:bitstring));
+
+    !(
+    out(att, Cc);
+    in(att, salt:bitstring);
+    let x = H((salt, H((Cc, pwd)))) in
+    let v = exp(g, x) in
+    new a:bitstring;
+    let A = exp(g, a) in
+    (
+    reveal_a(a) |
+    (
+    out(att, A);
+    in(att, B:bitstring);
+    let u = H((A, B)) in
+    let k = H((N, g)) in
+    let gb = subr(B, mult(k, v)) in
+    let K = H(mult(exp(gb, a), exp(exp(gb, x),u))) in
+    (
+     (reveal_Kc(A, K) |
+
+    let M1 = H((N, g, Cc, salt, A, B, K)) in
+    event client_send_proof(Cc, Sc, A, B, K);
+    out(att, M1);
+    in(att, M2: bitstring);
+    let (=M2) = H((A, M1, K)) in
+    event client_accept_proof(Cc, Sc, A, B, K)))))).
+
+
+
+
+let server(Ss: name)=
+
+    !(
+    in(att, Cs:name);
+    get password_file(=Ss, =Cs, salt, v) in
+    out(att, salt);
+    in(att, A: bitstring);
+    new b: bitstring;
+    (
+      reveal_b(b)
+    |
+      ( let k = H((N, g)) in
+        let B = add(exp(g,b),  mult(k, v)) in
+        let u = H((A, B)) in
+        let K = H(mult(exp(A, b), exp(exp(v, b), u))) in
+        out(att, B);
+        (
+          reveal_Ks(B, K)
+        |
+          ( in(att, M1: bitstring);
+            let (=M1) = H((N, g, Cs, salt, A, B, K)) in
+            event server_accept_proof(Cs, Ss, A, B, K);
+            let M2 = H((A, M1, K)) in
+            event server_send_proof(Cs, Ss, A, B, K);
+            out(att, M2) )
+        )
+      )
+    ) ).
+
+
+(*not attacker(new b).*)
+
+
+
+
+(*************************************************************
+ *                Main process                               *
+ *************************************************************)
+
+process
+
+        !(
+            new S:name; event honest_server(S);
+            new C:name; event honest_client(C);
+            new C': name; new S': name;
+            out(att, (C, S, C', S'));
+            new cpC: channel;
+            new cpC': channel;
+            new cpS: channel;
+            (
+                client_registration_phase(C, cpS, cpC, honest) | server_registration_phase(S, cpS) | client(C, S, cpC) | server(S) 
+            )
+        )
