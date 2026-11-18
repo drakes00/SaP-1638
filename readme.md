@@ -7,7 +7,9 @@ This artifacts folder contains the necessary files to reproduce the results pres
 To run the models and automation scripts in this repository, you need the following tools installed:
 
 * **Python** (3.8 or later) and [**uv**](https://docs.astral.sh/uv/): Required to execute the verification wrapper script (`scripy.py`). The script only uses the Python standard library, so there is nothing else to install.
-* **ProVerif**: Required to verify the `.pv` protocol models. It is not installed by `uv`; see <https://bblanche.gitlabpages.inria.fr/proverif/> (an `opam` package is also available).
+* **ProVerif**: Required to verify the `.pv` protocol models. It is not installed by `uv`. We recommend building ProVerif from the `master` branch of the official GitLab repository:
+  * **Repository:** <https://gitlab.inria.fr/bblanche/proverif/-/tree/master/proverif>
+  * **Branch:** `master` (e.g., `git clone -b master https://gitlab.inria.fr/bblanche/proverif.git`)
 
 *(Note: Ensure the `proverif` executable is on your system `PATH` before running the Python script. The script calls it by that name.)*
 

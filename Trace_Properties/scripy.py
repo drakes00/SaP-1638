@@ -14,11 +14,7 @@ skip any set above one that has already failed.
 
 Two phases, run back to back.  R uses the reveal capabilities only; M adds
 the ones where the attacker picks the value instead of the honest party
-drawing it.  M is seeded with whatever R broke: M_x simulates R_x, so an
-R-set is weaker than any M-set you get by swapping members, and carrying it
-over prunes all of those for free.  Only sets touching a fresh M_* capability
-are actually run in phase M -- the rest were settled in phase R.
-
+drawing it.  
 Output lands in <OUT>/{R,M}/, one .pv and one .out per configuration, plus a
 minimal.txt listing the results:
 
@@ -66,34 +62,20 @@ CAPS = {
     "R_Ks": ("let reveal_Ks(x':bitstring, x:bitstring) = event R_Ks(x', x).",
              "let reveal_Ks(x':bitstring, x:bitstring) = event R_Ks(x', x); out(att, x)."),
 
-    # M_*: the honest party reads the value off the network instead of
-    # drawing it.  Watch the whitespace -- these must match base.pv exactly
-    # (note the space in "new b: ").
+
     "M_a": ("new a:bitstring;", "in(att, a:bitstring);"),
     "M_b": ("new b: bitstring;", "in(att, b: bitstring);"),
     "M_pwd": ("new pwd:bitstring;", "in(att, pwd:bitstring);"),
     "M_salt": ("new s:bitstring;", "in(att, s:bitstring);"),
 }
 
-# Macros to splice in when a capability is *off*, overriding what base.pv
-# says.  Only needed where a query mentions the event; see render().
+
 INERT = {
     "R_Kc": "let reveal_Kc(x':bitstring, x:bitstring) = 0.",
     "R_Ks": "let reveal_Ks(x':bitstring, x:bitstring) = 0.",
 }
 
-# Holding x already gets you y, so {x, y} is really just {x}, and {x} outranks
-# {y} whenever y breaks something.  Transitively closed by hand.
-#
-# Only two kinds of implication are declared here: the same capability held
-# earlier rather than later, and choosing a value rather than being told it.
-# Derivable ones are left out on purpose.  R_pwd does yield R_v -- guess the
-# password, recompute the verifier from the public salt -- but a database
-# breach and a password guess are separate incidents with separate defences,
-# so ordering them would erase one of them from the results whenever both
-# break a property.  The lattice ranks incidents, not derivable knowledge.
-# R_b -> R_v is absent for the stronger reason that the escalation is the
-# result of the paper, not an assumption going into the search.
+
 IMPLIES = {
     "R_pwd": ["R_pwd_aft"],
     "R_v": ["R_v_aft"],
@@ -103,27 +85,13 @@ IMPLIES = {
     "M_pwd": ["R_pwd", "R_pwd_aft"],
 }
 
-# Combinations we refuse to generate.  {R_Kc, R_Ks} used to sit here: it is
-# not an implication (K_c and K_s differ when the sessions are not partnered)
-# but it broke nothing, so skipping it saved about a fifth of the search.
-# That evidence was collected under the old freshness restrictions, which
-# stopped a revealed session from ever accepting, so it no longer counts --
-# put the pair back until a clean run says otherwise.
+
 EXCLUDE = []
 
 
-# Freshness belongs in the query, not in a restriction.  A restriction is read
-# over the whole trace, so "no accept together with a reveal of that key" also
-# forbids *other* sessions from completing once they have been revealed -- far
-# stronger than the BR condition, which exempts only the test session and its
-# partner.  As a conclusion it scopes to the key under test instead.
+
 #
-# Every property gets the clause, not just secrecy: given K the attacker
-# computes M1 and M2 itself, so a key reveal breaks authentication and the UKS
-# properties for a reason that says nothing about SRP.  Ak and Bk occur only
-# here, so ProVerif reads them existentially -- any session holding that key
-# value counts as the partner, which is what we want, since under a UKS the
-# partner's A need not be the tested A.
+# Guards for generating the query
 def guarded(variables, premise, conclusion=None):
     head = conclusion + " || " if conclusion else ""
     return (f"query {variables},\n"
@@ -148,8 +116,7 @@ TWO_SESSIONS = ("C: name, S: name, C': name, S': name, A: bitstring, "
 Deriv = "x:bitstring"
 
 # name -> (restrictions, query).  ProVerif answering "is false" = broken.
-# Nothing needs restrictions today; the slot stays for the guessing-resistance
-# biprocess, which will.
+
 PROPERTIES = {
 
     "ks_server": ("", guarded(
@@ -301,10 +268,6 @@ def render(base, on, restrictions, query):
     for c in on:
         off, upon = CAPS[c]
         text = swap(text, off, upon) or complain(c, off, text)
-    # The K reveals are the only ones a query looks at, so when they are off
-    # their event has to go too -- base.pv still announces R_Kc even with the
-    # output removed, and an announced reveal that never happened would excuse
-    # a real attack under the freshness conclusion.
     for c, inert in INERT.items():
         if c not in on:
             text = swap(text, CAPS[c][0], inert) or complain(c, CAPS[c][0], text)
@@ -481,8 +444,6 @@ def main():
     for bad in [n for n in todo if n not in PROPERTIES]:
         sys.exit(f"unknown property {bad!r}; known: {', '.join(PROPERTIES)}")
 
-    # Clear out only the properties we are redoing, so running one of them
-    # does not throw away last night's results for the other seven.
     for tag, _ in phases:
         d = os.path.join(OUT, tag)
         if not os.path.isdir(d):
@@ -510,7 +471,7 @@ def main():
             known = carry(result[0])          # seeds the next phase
 
     # Phase M's answer already contains the carried R-sets, so the last phase
-    # to run is the combined result -- printing both would just repeat it.
+    # to run is the combined result 
     last = phases[-1][0]
     results = read_minimal(os.path.join(OUT, last, "minimal.txt"))
     width = max(len(n) for n in PROPERTIES)
